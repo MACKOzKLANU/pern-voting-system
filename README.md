@@ -158,10 +158,6 @@ CREATE INDEX idx_elections_dates ON elections(start_date, end_date);
 CREATE INDEX idx_posts_feed 
 ON posts(election_id, is_visible, created_at DESC);
 
--- 🔥 vote counting optimization
-CREATE INDEX idx_votes_post_id_created_at 
-ON votes(post_id, created_at DESC);
-
 -- 🔥 partial index for visible posts
 CREATE INDEX idx_posts_visible_only 
 ON posts(election_id, created_at DESC) 

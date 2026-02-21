@@ -57,7 +57,7 @@ CREATE TABLE users (
     name VARCHAR(50) NOT NULL,
     surname VARCHAR(50) NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL
-        CHECK (email ~ '^[a-zA-Z0-9._%+-]+@zgierz\.edu\.pl$'),
+        CHECK (email ~ '^[a-z]+\.[a-z]+@zgierz\.edu\.pl$'),
     password TEXT NOT NULL,
     role user_role NOT NULL DEFAULT 'student',
     is_verified BOOLEAN DEFAULT false,

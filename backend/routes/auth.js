@@ -1,9 +1,11 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import pool from '../config/db.js';
 import { protect } from '../middleware/auth.js';
-import { generateOTP, tokenExpiry } from '../utils/tokens.js';
+import { generateOTP, generateToken, tokenExpiry } from '../utils/tokens.js';
+import { sendVerificationOtp } from '../services/mailService.js';
+import { capitalize, normalizeEmail } from '../utils/strings.js';
+import { isSchoolEmail } from '../utils/validators.js';
 
 const router = express.Router();
 
@@ -14,34 +16,34 @@ const cookieOptions = {
     maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
 }
 
-const generateToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET, {
-        expiresIn: '30d'
-    });
-}
-
 // Register
 router.post('/register', async (req, res) => {
     const { email, password } = req.body;
-    
 
     if (!email || !password) {
         return res.status(400).json({ message: 'Please provide all required fields' });
     }
 
-    let emailLowerCase = email.toLowerCase();
+    let emailLowerCase = normalizeEmail(email);
 
     const userExists = await pool.query('SELECT id FROM users WHERE email = $1',
-        [email]
+        [emailLowerCase]
     );
 
     if (userExists.rows.length > 0) {
         return res.status(400).json({ message: 'User already exists' });
     }
 
-    const name = email.split('.')[0];
-    const surname = (email.split('.'))[1].split('@')[0];
+    if (!isSchoolEmail(emailLowerCase)) {
+        return res.status(400).json({ message: 'Please provide a valid school email (@zgierz.edu.pl)' });
+    }
 
+    // Extract name and surname from email
+    const [rawName, rest] = emailLowerCase.split('.');
+    const rawSurname = rest.split('@')[0];
+
+    const name = capitalize(rawName);
+    const surname = capitalize(rawSurname);
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const otpPlain = generateOTP();
@@ -55,9 +57,14 @@ router.post('/register', async (req, res) => {
         [name, surname, emailLowerCase, hashedPassword, hashedOtp, otpExpires]
     );
 
-    const token = generateToken(newUser.rows[0].token);
+    const token = generateToken(newUser.rows[0].id);
 
     res.cookie('token', token, cookieOptions);
+
+
+    sendVerificationOtp(emailLowerCase, name, otpPlain)
+        .catch(err => console.error("Failed to send verification email:", err));
+
 
     return res.status(201).json({ user: newUser.rows[0] });
 })
@@ -70,11 +77,13 @@ router.post('/login', async (req, res) => {
         return res.status(400).json({ message: 'Please provide all required fields' });
     }
 
+    let emailLowerCase = normalizeEmail(email);
+
     const user = await pool.query('SELECT id, name, email, password from users WHERE email = $1',
-        [email]
+        [emailLowerCase]
     );
 
-    if (user.rows[0].length === 0) {
+    if (user.rows.length === 0) {
         return res.status(400).json({ message: 'Invalid credentials' });
     }
 
